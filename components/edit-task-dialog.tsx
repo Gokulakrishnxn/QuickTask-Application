@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { format } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { IconCalendar, IconClock, IconFolder } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,7 +11,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,17 +47,14 @@ const priorities = [
   { value: "high", label: "High" },
 ]
 
-interface CreateTaskSheetProps {
-  children: React.ReactNode
-  onTaskCreate?: (task: Omit<Task, "id">) => Promise<void>
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
+interface EditTaskDialogProps {
+  task: Task | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onTaskUpdate?: (id: string, updates: Partial<Task>) => Promise<void>
 }
 
-export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, onOpenChange }: CreateTaskSheetProps) {
-  const [internalOpen, setInternalOpen] = React.useState(false)
-  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
-  const setOpen = onOpenChange || setInternalOpen
+export function EditTaskDialog({ task, open, onOpenChange, onTaskUpdate }: EditTaskDialogProps) {
   const { projects, loading: projectsLoading } = useProjects()
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
@@ -70,17 +66,31 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
   const [reminder, setReminder] = React.useState<Date | undefined>(undefined)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
+  // Update form when task changes
+  React.useEffect(() => {
+    if (task && open) {
+      setTitle(task.title)
+      setDescription(task.description || "")
+      setStatus(task.status)
+      setPriority(task.priority)
+      setProjectId(task.project_id || "")
+      setDate(task.date ? parseISO(task.date) : undefined)
+      setDeadline(task.deadline ? parseISO(task.deadline) : undefined)
+      setReminder(task.reminder ? parseISO(task.reminder) : undefined)
+    }
+  }, [task, open])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!title.trim()) {
+    if (!task || !title.trim()) {
       return
     }
 
     setIsSubmitting(true)
     try {
-      if (onTaskCreate) {
-        await onTaskCreate({
+      if (onTaskUpdate) {
+        await onTaskUpdate(task.id, {
           title: title.trim(),
           description: description.trim() || undefined,
           status,
@@ -91,26 +101,16 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
           reminder: reminder ? reminder.toISOString() : undefined,
         })
       }
-      
-      // Show success notification
-      toast.success("Task added successfully", {
-        description: `"${title.trim()}" has been added to your tasks.`,
+
+      toast.success("Task updated successfully", {
+        description: `"${title.trim()}" has been updated.`,
         duration: 3000,
       })
-      
-      // Reset form
-      setTitle("")
-      setDescription("")
-      setStatus("todo")
-      setPriority("medium")
-      setProjectId("")
-      setDate(undefined)
-      setDeadline(undefined)
-      setReminder(undefined)
-      setOpen(false)
+
+      onOpenChange(false)
     } catch (error) {
-      console.error("Error creating task:", error)
-      toast.error("Failed to create task", {
+      console.error("Error updating task:", error)
+      toast.error("Failed to update task", {
         description: error instanceof Error ? error.message : "Please try again.",
         duration: 4000,
       })
@@ -119,25 +119,26 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
     }
   }
 
+  if (!task) return null
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-6">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <DialogHeader className="text-left space-y-2">
-            <DialogTitle className="text-2xl font-semibold">Add New Task</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              Create a new task by filling in the details below. All fields except title are optional.
+          <DialogHeader className="text-left">
+            <DialogTitle className="text-2xl font-semibold">Edit Task</DialogTitle>
+            <DialogDescription className="text-base mt-2">
+              Update the task details below. All fields except title are optional.
             </DialogDescription>
           </DialogHeader>
-          <div className={`space-y-6 ${isSubmitting ? "opacity-50 pointer-events-none" : ""}`}>
+          <div className={`space-y-6 py-2 ${isSubmitting ? "opacity-50 pointer-events-none" : ""}`}>
             {/* Task Title - Required */}
             <div className="space-y-2">
-              <Label htmlFor="title" className="text-sm font-semibold">
+              <Label htmlFor="edit-title" className="text-sm font-semibold">
                 Task Title <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="title"
+                id="edit-title"
                 placeholder="e.g., Complete project documentation"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -148,11 +149,11 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
 
             {/* Task Description */}
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-semibold">
+              <Label htmlFor="edit-description" className="text-sm font-semibold">
                 Task Description
               </Label>
               <Textarea
-                id="description"
+                id="edit-description"
                 placeholder="Add a detailed description of the task..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -163,7 +164,7 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
 
             {/* Project Name - Select Project */}
             <div className="space-y-2">
-              <Label htmlFor="project" className="text-sm font-semibold flex items-center gap-2">
+              <Label htmlFor="edit-project" className="text-sm font-semibold flex items-center gap-2">
                 <IconFolder className="h-4 w-4" />
                 Project Name
               </Label>
@@ -172,7 +173,7 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                 onValueChange={(value) => setProjectId(value === "none" ? "" : value)}
                 disabled={projectsLoading}
               >
-                <SelectTrigger id="project" className="h-10">
+                <SelectTrigger id="edit-project" className="h-10">
                   <SelectValue placeholder={projectsLoading ? "Loading projects..." : "Select a project (optional)"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -189,11 +190,11 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
             {/* Status and Priority - Side by Side */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="status" className="text-sm font-semibold">
+                <Label htmlFor="edit-status" className="text-sm font-semibold">
                   Status
                 </Label>
                 <Select value={status} onValueChange={(value) => setStatus(value as Task["status"])}>
-                  <SelectTrigger id="status" className="h-10">
+                  <SelectTrigger id="edit-status" className="h-10">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -206,14 +207,14 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="priority" className="text-sm font-semibold">
+                <Label htmlFor="edit-priority" className="text-sm font-semibold">
                   Priority
                 </Label>
                 <Select
                   value={priority}
                   onValueChange={(value) => setPriority(value as Task["priority"])}
                 >
-                  <SelectTrigger id="priority" className="h-10">
+                  <SelectTrigger id="edit-priority" className="h-10">
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
                   <SelectContent>
@@ -226,16 +227,17 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                 </Select>
               </div>
             </div>
+
             {/* Date and Deadline - Side by Side */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="date" className="text-sm font-semibold">
+                <Label htmlFor="edit-date" className="text-sm font-semibold">
                   Date
                 </Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      id="date"
+                      id="edit-date"
                       variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal h-10",
@@ -257,13 +259,13 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                 </Popover>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="deadline" className="text-sm font-semibold">
+                <Label htmlFor="edit-deadline" className="text-sm font-semibold">
                   Deadline
                 </Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
-                      id="deadline"
+                      id="edit-deadline"
                       variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal h-10",
@@ -288,13 +290,13 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
 
             {/* Reminder */}
             <div className="space-y-2">
-              <Label htmlFor="reminder" className="text-sm font-semibold">
+              <Label htmlFor="edit-reminder" className="text-sm font-semibold">
                 Reminder
               </Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    id="reminder"
+                    id="edit-reminder"
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal h-10",
@@ -316,7 +318,7 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                           if (reminder) {
                             newDate.setHours(reminder.getHours(), reminder.getMinutes())
                           } else {
-                            newDate.setHours(9, 0) // Default to 9:00 AM
+                            newDate.setHours(9, 0)
                           }
                           setReminder(newDate)
                         } else {
@@ -327,11 +329,11 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                     />
                     {reminder && (
                       <div className="mt-3 pt-3 border-t">
-                        <Label htmlFor="reminder-time" className="text-sm font-medium mb-2 block">
+                        <Label htmlFor="edit-reminder-time" className="text-sm font-medium mb-2 block">
                           Time
                         </Label>
                         <Input
-                          id="reminder-time"
+                          id="edit-reminder-time"
                           type="time"
                           value={reminder ? format(reminder, "HH:mm") : ""}
                           onChange={(e) => {
@@ -359,14 +361,14 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
               className="sm:min-w-[100px]"
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isSubmitting || !title.trim()}
               className="sm:min-w-[120px]"
             >
@@ -392,10 +394,10 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>Adding...</span>
+                  <span>Updating...</span>
                 </>
               ) : (
-                "Add Task"
+                "Update Task"
               )}
             </Button>
           </DialogFooter>

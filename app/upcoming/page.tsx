@@ -229,25 +229,43 @@ export default function Page() {
 
   const today = startOfDay(new Date())
 
-  // Filter tasks with upcoming deadlines or dates
+  // Filter tasks with upcoming deadlines or dates (includes today and future)
   const upcomingTasks = tasks.filter((task) => {
+    // Exclude completed and canceled tasks
+    if (task.status === "done" || task.status === "canceled") {
+      return false
+    }
+
+    // Check deadline first
     if (task.deadline) {
       try {
-        const deadline = parseISO(task.deadline)
-        return isAfter(deadline, today) && task.status !== "done" && task.status !== "canceled"
+        const deadline = startOfDay(parseISO(task.deadline))
+        // Include today and future dates
+        return deadline >= today
       } catch {
         return false
       }
     }
+    
+    // Then check date
     if (task.date) {
       try {
-        const taskDate = parseISO(task.date)
-        return isAfter(taskDate, today) && task.status !== "done" && task.status !== "canceled"
+        const taskDate = startOfDay(parseISO(task.date))
+        // Include today and future dates
+        return taskDate >= today
       } catch {
         return false
       }
     }
+    
     return false
+  }).sort((a, b) => {
+    // Sort by earliest date (deadline or date)
+    const dateA = a.deadline || a.date
+    const dateB = b.deadline || b.date
+    if (!dateA) return 1
+    if (!dateB) return -1
+    return parseISO(dateA).getTime() - parseISO(dateB).getTime()
   })
 
   // Group tasks by date

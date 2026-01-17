@@ -104,6 +104,7 @@ export type Task = {
   date?: string
   deadline?: string
   reminder?: string
+  project_id?: string
 }
 
 export const createColumns = (
@@ -241,12 +242,16 @@ export function TasksTable({
   onUpdateTask,
   onDeleteTask,
   onDeleteAll,
+  hideFilters = false,
+  hideAddTaskButton = false,
 }: { 
   data: Task[]
   onAddTask?: (task: Omit<Task, "id">) => Promise<void>
   onUpdateTask?: (id: string, updates: Partial<Task>) => Promise<void>
   onDeleteTask?: (id: string) => Promise<void>
   onDeleteAll?: () => Promise<void>
+  hideFilters?: boolean
+  hideAddTaskButton?: boolean
 }) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -282,70 +287,72 @@ export function TasksTable({
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex flex-1 items-center space-x-2">
-          <Input
-            placeholder="Filter tasks..."
-            value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-              table.getColumn("title")?.setFilterValue(event.target.value)
-            }
-            className="h-8 w-[150px] lg:w-[250px]"
-          />
-          {table.getColumn("status") && (
-            <Select
-              value={
-                ((table.getColumn("status")?.getFilterValue() as string[]) ?? []).join(",") || undefined
+        {!hideFilters && (
+          <div className="flex flex-1 items-center space-x-2">
+            <Input
+              placeholder="Filter tasks..."
+              value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
+              onChange={(event) =>
+                table.getColumn("title")?.setFilterValue(event.target.value)
               }
-              onValueChange={(value) => {
-                const column = table.getColumn("status")
-                if (value === "all") {
-                  column?.setFilterValue([])
-                } else {
-                  column?.setFilterValue(value ? [value] : [])
+              className="h-8 w-[150px] lg:w-[250px]"
+            />
+            {table.getColumn("status") && (
+              <Select
+                value={
+                  ((table.getColumn("status")?.getFilterValue() as string[]) ?? []).join(",") || undefined
                 }
-              }}
-            >
-              <SelectTrigger className="h-8 w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {statuses.map((status) => (
-                  <SelectItem key={status.value} value={status.value}>
-                    {status.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {table.getColumn("priority") && (
-            <Select
-              value={
-                ((table.getColumn("priority")?.getFilterValue() as string[]) ?? []).join(",") || undefined
-              }
-              onValueChange={(value) => {
-                const column = table.getColumn("priority")
-                if (value === "all") {
-                  column?.setFilterValue([])
-                } else {
-                  column?.setFilterValue(value ? [value] : [])
+                onValueChange={(value) => {
+                  const column = table.getColumn("status")
+                  if (value === "all") {
+                    column?.setFilterValue([])
+                  } else {
+                    column?.setFilterValue(value ? [value] : [])
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 w-[150px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  {statuses.map((status) => (
+                    <SelectItem key={status.value} value={status.value}>
+                      {status.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {table.getColumn("priority") && (
+              <Select
+                value={
+                  ((table.getColumn("priority")?.getFilterValue() as string[]) ?? []).join(",") || undefined
                 }
-              }}
-            >
-              <SelectTrigger className="h-8 w-[150px]">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All priorities</SelectItem>
-                {priorities.map((priority) => (
-                  <SelectItem key={priority.value} value={priority.value}>
-                    {priority.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
+                onValueChange={(value) => {
+                  const column = table.getColumn("priority")
+                  if (value === "all") {
+                    column?.setFilterValue([])
+                  } else {
+                    column?.setFilterValue(value ? [value] : [])
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 w-[150px]">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All priorities</SelectItem>
+                  {priorities.map((priority) => (
+                    <SelectItem key={priority.value} value={priority.value}>
+                      {priority.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           {onDeleteAll && table.getFilteredRowModel().rows.length > 0 && (
             <Button
@@ -408,12 +415,14 @@ export function TasksTable({
               )}
             </Button>
           )}
-          <CreateTaskSheet onTaskCreate={onAddTask} open={isCreateTaskOpen} onOpenChange={setIsCreateTaskOpen}>
-            <Button className="h-8">
-              <IconPlus className="mr-2 h-4 w-4" />
-              Add Task
-            </Button>
-          </CreateTaskSheet>
+          {!hideAddTaskButton && onAddTask && (
+            <CreateTaskSheet onTaskCreate={onAddTask} open={isCreateTaskOpen} onOpenChange={setIsCreateTaskOpen}>
+              <Button className="h-8">
+                <IconPlus className="mr-2 h-4 w-4" />
+                Add Task
+              </Button>
+            </CreateTaskSheet>
+          )}
         </div>
       </div>
       <div className="rounded-md border">

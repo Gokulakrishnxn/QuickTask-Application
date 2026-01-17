@@ -15,7 +15,7 @@ import { IconSun, IconCalendar } from "@tabler/icons-react"
 import { format, isToday, parseISO } from "date-fns"
 
 export default function Page() {
-  const { tasks, loading, error, addTask, updateTask, deleteTask } = useTasks()
+  const { tasks, loading, error, updateTask, deleteTask } = useTasks()
 
   // Filter tasks for "My Day" - tasks due today or with today's date
   const myDayTasks = tasks.filter((task) => {
@@ -71,7 +71,7 @@ export default function Page() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" onTaskCreate={addTask} />
+      <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col">
@@ -187,9 +187,10 @@ export default function Page() {
                     )}
                     <TasksTable 
                       data={myDayTasks} 
-                      onAddTask={addTask}
                       onUpdateTask={updateTask}
                       onDeleteTask={deleteTask}
+                      hideFilters={true}
+                      hideAddTaskButton={true}
                     />
                   </>
                 )}

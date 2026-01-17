@@ -10,6 +10,8 @@ import {
   IconX,
   IconCheck,
   IconTrash,
+  IconEdit,
+  IconFolder,
 } from "@tabler/icons-react"
 import {
   Sheet,
@@ -20,9 +22,11 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
+import { EditTaskDialog } from "@/components/edit-task-dialog"
 import { type Task } from "@/components/tasks-table"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useProjects } from "@/hooks/use-projects"
 
 interface TaskOverviewSheetProps {
   task: Task | null
@@ -40,8 +44,13 @@ export function TaskOverviewSheet({
   onDeleteTask 
 }: TaskOverviewSheetProps) {
   const [isUpdating, setIsUpdating] = React.useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const { projects } = useProjects()
 
   if (!task) return null
+
+  // Find the project for this task
+  const project = task.project_id ? projects.find(p => p.id === task.project_id) : null
 
   const handleMarkComplete = async () => {
     if (!onUpdateTask) return
@@ -132,6 +141,29 @@ export function TaskOverviewSheet({
 
         {/* Content */}
         <div className="flex-1 px-6 py-6 space-y-6">
+          {/* Project Name */}
+          {project && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <IconFolder className="h-4 w-4 text-primary" />
+                </div>
+                <span>Project</span>
+              </div>
+              <div className="pl-9">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="p-1.5 rounded-md"
+                    style={{ backgroundColor: `${project.color}20` }}
+                  >
+                    <IconFolder className="h-3.5 w-3.5" style={{ color: project.color }} />
+                  </div>
+                  <span className="text-sm font-medium">{project.name}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Description */}
           {task.description && (
             <div className="space-y-3">
@@ -152,7 +184,7 @@ export function TaskOverviewSheet({
           {/* Date Information */}
           {(task.date || task.deadline || task.reminder) && (
             <>
-              {task.description && <Separator />}
+              {(task.description || project) && <Separator />}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <div className="p-1.5 rounded-md bg-primary/10">
@@ -230,15 +262,27 @@ export function TaskOverviewSheet({
         <div className="sticky bottom-0 border-t bg-background px-6 py-4">
           <div className="flex items-center gap-2">
             {onUpdateTask && (
-              <Button
-                onClick={handleMarkComplete}
-                variant={task.status === "done" ? "outline" : "default"}
-                className="flex-1"
-                disabled={isUpdating}
-              >
-                <IconCheck className="mr-2 h-4 w-4" />
-                {task.status === "done" ? "Mark Incomplete" : "Mark Complete"}
-              </Button>
+              <>
+                <Button
+                  onClick={() => {
+                    setIsEditDialogOpen(true)
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={isUpdating}
+                >
+                  <IconEdit className="mr-2 h-4 w-4" />
+                  Edit Task
+                </Button>
+                <Button
+                  onClick={handleMarkComplete}
+                  variant={task.status === "done" ? "outline" : "default"}
+                  disabled={isUpdating}
+                >
+                  <IconCheck className="mr-2 h-4 w-4" />
+                  {task.status === "done" ? "Incomplete" : "Complete"}
+                </Button>
+              </>
             )}
             {onDeleteTask && (
               <Button
@@ -253,6 +297,12 @@ export function TaskOverviewSheet({
           </div>
         </div>
       </SheetContent>
+      <EditTaskDialog
+        task={task}
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        onTaskUpdate={onUpdateTask}
+      />
     </Sheet>
   )
 }

@@ -26,10 +26,6 @@ export default function Page() {
     return 0
   })
 
-  const highPriorityTasks = importantTasks.filter((task) => task.priority === "high")
-  const mediumPriorityTasks = importantTasks.filter((task) => task.priority === "medium")
-  const inProgressImportant = importantTasks.filter((task) => task.status === "in progress")
-  const todoImportant = importantTasks.filter((task) => task.status === "todo")
 
   return (
     <SidebarProvider
@@ -56,64 +52,6 @@ export default function Page() {
                   <p className="text-muted-foreground">
                     High and medium priority tasks that need your attention
                   </p>
-                </div>
-
-                {/* Stats Cards */}
-                <div className="grid gap-4 md:grid-cols-4 mb-6">
-                  <Card className="border-red-200 dark:border-red-900">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <IconAlertCircle className="h-4 w-4 text-red-500" />
-                        High Priority
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                        {highPriorityTasks.length}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Urgent tasks
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-yellow-200 dark:border-yellow-900">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <IconAlertTriangle className="h-4 w-4 text-yellow-500" />
-                        Medium Priority
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                        {mediumPriorityTasks.length}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Important tasks
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{inProgressImportant.length}</div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Active important
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">To Do</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{todoImportant.length}</div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Pending important
-                      </p>
-                    </CardContent>
-                  </Card>
                 </div>
 
                 {error && (
