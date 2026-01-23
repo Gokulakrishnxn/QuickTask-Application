@@ -28,13 +28,14 @@ export async function POST(request: Request) {
       )
     }
 
+    // Build email payload with proper typing
     const response = await resend.emails.send({
       from,
       to,
       subject,
-      html,
-      text,
-    })
+      ...(html ? { html } : {}),
+      ...(text ? { text } : {}),
+    } as any)
 
     return NextResponse.json(
       {

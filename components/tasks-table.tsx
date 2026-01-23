@@ -341,7 +341,7 @@ export function TasksTable({
   onAddTask?: (task: Omit<Task, "id">) => Promise<void>
   onUpdateTask?: (id: string, updates: Partial<Task>) => Promise<void>
   onDeleteTask?: (id: string) => Promise<void>
-  onDeleteAll?: () => Promise<void>
+  onDeleteAll?: () => Promise<number | void>
   hideFilters?: boolean
   hideAddTaskButton?: boolean
 }) {

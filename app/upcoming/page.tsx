@@ -51,11 +51,10 @@ function TaskCard({
 }) {
   const [isUpdating, setIsUpdating] = React.useState(false)
 
-  const handleStatusChange = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleStatusChange = async (checked: boolean | "indeterminate") => {
     setIsUpdating(true)
     try {
-      const newStatus = task.status === "done" ? "todo" : "done"
+      const newStatus = checked ? "done" : "todo"
       await onUpdateTask(task.id, { status: newStatus })
       toast.success(`Task marked as ${newStatus}`)
     } catch (error) {
