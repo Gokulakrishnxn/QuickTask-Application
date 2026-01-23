@@ -50,7 +50,7 @@ export function NavMain({
           )}
           {/* Tasks - Second item */}
           <SidebarMenuItem>
-            <SidebarMenuButton 
+            <SidebarMenuButton
               asChild
               tooltip="Tasks"
               isActive={pathname === "/lists"}
@@ -66,7 +66,7 @@ export function NavMain({
             const IconComponent = item.icon
             const isActive = pathname === item.url || (item.url === "/lists" && pathname?.startsWith("/lists"))
             return (
-              <SidebarMenuItem key={item.title}>
+            <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton 
                   asChild
                   tooltip={item.title}
@@ -74,10 +74,10 @@ export function NavMain({
                 >
                   <Link href={item.url}>
                     {IconComponent && <IconComponent />}
-                    <span>{item.title}</span>
+                <span>{item.title}</span>
                   </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             )
           })}
         </SidebarMenu>

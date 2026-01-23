@@ -23,6 +23,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -73,6 +90,7 @@ import {
   IconClock,
   IconDotsVertical,
   IconChevronDown,
+  IconTrash,
 } from "@tabler/icons-react"
 import { ArrowUpDown } from "lucide-react"
 import { toast } from "sonner"
@@ -178,8 +196,12 @@ const SAMPLE_AUDIT_LOGS = [
   },
 ]
 
-// Team Members Table Columns
-const teamMemberColumns: ColumnDef<TeamMember>[] = [
+// Team Members Table Columns Factory
+const createTeamMemberColumns = (
+  handleEditMember: (member: TeamMember) => void,
+  handleDeleteMember: (member: TeamMember) => void,
+  currentUser: { id: string; email: string; role: "Admin" | "Member" | "Viewer" }
+): ColumnDef<TeamMember>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -296,6 +318,8 @@ const teamMemberColumns: ColumnDef<TeamMember>[] = [
     enableHiding: false,
     cell: ({ row }) => {
       const member = row.original
+      const isAdmin = currentUser.role === "Admin"
+      const isCurrentUser = member.id === currentUser.id
 
       return (
         <DropdownMenu>
@@ -317,13 +341,32 @@ const teamMemberColumns: ColumnDef<TeamMember>[] = [
               Copy email
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleEditMember(member)}>
               <IconEdit className="mr-2 h-4 w-4" />
               Edit member
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">
-              Remove member
-            </DropdownMenuItem>
+            {/* Only show remove option for admins, and prevent removing yourself */}
+            {isAdmin && !isCurrentUser && (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => handleDeleteMember(member)}
+              >
+                <IconTrash className="mr-2 h-4 w-4" />
+                Remove member
+              </DropdownMenuItem>
+            )}
+            {isAdmin && isCurrentUser && (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                <IconTrash className="mr-2 h-4 w-4" />
+                Cannot remove yourself
+              </DropdownMenuItem>
+            )}
+            {!isAdmin && (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                <IconTrash className="mr-2 h-4 w-4" />
+                Only admins can remove members
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )
@@ -336,31 +379,26 @@ export default function Page() {
   const [emailInvite, setEmailInvite] = React.useState("")
   const [copiedLink, setCopiedLink] = React.useState(false)
   const [isInviteDialogOpen, setIsInviteDialogOpen] = React.useState(false)
+  const [teamMembers, setTeamMembers] = React.useState<TeamMember[]>(SAMPLE_TEAM_MEMBERS)
+  const [editingMember, setEditingMember] = React.useState<TeamMember | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
+  const [memberToDelete, setMemberToDelete] = React.useState<TeamMember | null>(null)
+  
+  // Current user - in a real app, this would come from authentication context
+  const currentUser = {
+    id: "1", // John Doe is the admin
+    email: "john@example.com",
+    role: "Admin" as const,
+  }
+  
+  // Check if current user is admin
+  const isAdmin = currentUser.role === "Admin"
 
   // Table state
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
-
-  const table = useReactTable({
-    data: SAMPLE_TEAM_MEMBERS,
-    columns: teamMemberColumns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
-  })
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteLink)
@@ -378,6 +416,71 @@ export default function Page() {
     setEmailInvite("")
     setIsInviteDialogOpen(false)
   }
+
+  const handleEditMember = (member: TeamMember) => {
+    setEditingMember(member)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleSaveMember = () => {
+    if (!editingMember) return
+
+    setTeamMembers((prev) =>
+      prev.map((m) => (m.id === editingMember.id ? editingMember : m))
+    )
+    toast.success("Member updated successfully")
+    setIsEditDialogOpen(false)
+    setEditingMember(null)
+  }
+
+  const handleDeleteMember = (member: TeamMember) => {
+    // Only admins can remove members
+    if (!isAdmin) {
+      toast.error("Only admins can remove team members")
+      return
+    }
+
+    // Prevent admin from removing themselves
+    if (member.id === currentUser.id) {
+      toast.error("You cannot remove yourself from the team")
+      return
+    }
+
+    setMemberToDelete(member)
+  }
+
+  const confirmDeleteMember = () => {
+    if (!memberToDelete) return
+
+    setTeamMembers((prev) => prev.filter((m) => m.id !== memberToDelete.id))
+    toast.success(`${memberToDelete.name} has been removed from the team`)
+    setMemberToDelete(null)
+  }
+
+  // Create columns after handlers are defined
+  const teamMemberColumns = React.useMemo(
+    () => createTeamMemberColumns(handleEditMember, handleDeleteMember, currentUser),
+    [currentUser, handleEditMember, handleDeleteMember]
+  )
+
+  const table = useReactTable({
+    data: teamMembers,
+    columns: teamMemberColumns,
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection,
+    },
+  })
 
   const getAuditIcon = (type: string) => {
     switch (type) {
@@ -513,32 +616,6 @@ export default function Page() {
                               }
                               className="max-w-sm"
                             />
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="ml-auto">
-                                  Columns <IconChevronDown className="ml-2 h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {table
-                                  .getAllColumns()
-                                  .filter((column) => column.getCanHide())
-                                  .map((column) => {
-                                    return (
-                                      <DropdownMenuCheckboxItem
-                                        key={column.id}
-                                        className="capitalize"
-                                        checked={column.getIsVisible()}
-                                        onCheckedChange={(value) =>
-                                          column.toggleVisibility(!!value)
-                                        }
-                                      >
-                                        {column.id}
-                                      </DropdownMenuCheckboxItem>
-                                    )
-                                  })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
                           </div>
                           <div className="overflow-hidden rounded-md border">
                             <Table>
@@ -726,6 +803,109 @@ export default function Page() {
           </div>
         </div>
       </SidebarInset>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+            <DialogDescription>
+              Update the member's information and role
+            </DialogDescription>
+          </DialogHeader>
+          {editingMember && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editingMember.name}
+                  onChange={(e) =>
+                    setEditingMember({ ...editingMember, name: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editingMember.email}
+                  onChange={(e) =>
+                    setEditingMember({ ...editingMember, email: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-role">Role</Label>
+                <Select
+                  value={editingMember.role}
+                  onValueChange={(value: "Admin" | "Member" | "Viewer") =>
+                    setEditingMember({ ...editingMember, role: value })
+                  }
+                >
+                  <SelectTrigger id="edit-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Admin">Admin</SelectItem>
+                    <SelectItem value="Member">Member</SelectItem>
+                    <SelectItem value="Viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-status">Status</Label>
+                <Select
+                  value={editingMember.status}
+                  onValueChange={(value: "active" | "pending" | "inactive") =>
+                    setEditingMember({ ...editingMember, status: value })
+                  }
+                >
+                  <SelectTrigger id="edit-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveMember}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!memberToDelete} onOpenChange={(open) => !open && setMemberToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Team Member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong>{memberToDelete?.name}</strong> from the team?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setMemberToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteMember}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove Member
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   )
 }

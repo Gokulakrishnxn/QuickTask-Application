@@ -27,6 +27,18 @@ import { type Task } from "@/components/tasks-table"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { useProjects } from "@/hooks/use-projects"
+import { supabase } from "@/lib/supabase"
+
+type TaskAuditLog = {
+  id: string
+  task_id: string
+  action: "created" | "updated" | "status_changed" | "deleted"
+  previous_values: Record<string, any> | null
+  new_values: Record<string, any> | null
+  actor_name: string | null
+  actor_email: string | null
+  created_at: string
+}
 
 interface TaskOverviewSheetProps {
   task: Task | null
@@ -46,6 +58,54 @@ export function TaskOverviewSheet({
   const [isUpdating, setIsUpdating] = React.useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false)
   const { projects } = useProjects()
+  const [auditLogs, setAuditLogs] = React.useState<TaskAuditLog[]>([])
+  const [isLoadingAudit, setIsLoadingAudit] = React.useState(false)
+  const [auditError, setAuditError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!task?.id) return
+
+    let isMounted = true
+    const fetchAuditLogs = async () => {
+      try {
+        setIsLoadingAudit(true)
+        const { data, error } = await supabase
+          .from("task_audit_logs")
+          .select("*")
+          .eq("task_id", task.id)
+          .order("created_at", { ascending: false })
+          .limit(20)
+
+        if (error) {
+          console.error("Failed to load task audit logs:", error)
+          if (!isMounted) return
+          setAuditError(
+            error.message || "Failed to load activity history for this task."
+          )
+          setAuditLogs([])
+          return
+        }
+
+        if (!isMounted) return
+        setAuditError(null)
+        setAuditLogs((data as TaskAuditLog[]) || [])
+      } catch (err) {
+        console.error("Failed to load task audit logs:", err)
+        if (!isMounted) return
+        setAuditError("Failed to load activity history for this task.")
+        setAuditLogs([])
+      } finally {
+        if (!isMounted) return
+        setIsLoadingAudit(false)
+      }
+    }
+
+    fetchAuditLogs()
+
+    return () => {
+      isMounted = false
+    }
+  }, [task?.id])
 
   if (!task) return null
 
@@ -254,6 +314,71 @@ export function TaskOverviewSheet({
                 <span className="text-xs font-medium text-muted-foreground">Task ID</span>
                 <span className="text-xs font-mono text-foreground">{task.id.slice(0, 8)}...</span>
               </div>
+            </div>
+          </div>
+
+          {/* Audit log / Activity */}
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <IconClock className="h-4 w-4 text-primary" />
+              </div>
+              <span>Activity</span>
+            </div>
+            <div className="pl-9 space-y-2">
+              {isLoadingAudit ? (
+                <p className="text-xs text-muted-foreground">Loading activity...</p>
+              ) : auditError ? (
+                <p className="text-xs text-destructive">{auditError}</p>
+              ) : auditLogs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No recent changes recorded for this task.
+                </p>
+              ) : (
+                <ul className="space-y-2 text-xs">
+                  {auditLogs.map((log) => {
+                    const when = format(
+                      new Date(log.created_at),
+                      "MMM d, yyyy 'at' h:mm a"
+                    )
+                    const who =
+                      log.actor_name ||
+                      log.actor_email ||
+                      "Someone"
+                    let what: string
+                    switch (log.action) {
+                      case "created":
+                        what = "created this task"
+                        break
+                      case "deleted":
+                        what = "deleted this task"
+                        break
+                      case "status_changed":
+                        what = "changed the status"
+                        break
+                      default:
+                        what = "updated this task"
+                    }
+
+                    return (
+                      <li
+                        key={log.id}
+                        className="flex items-start justify-between gap-2 rounded-md bg-muted/50 px-3 py-2"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-foreground">
+                            {who} <span className="font-normal text-muted-foreground">{what}</span>
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {when}
+                          </p>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </div>

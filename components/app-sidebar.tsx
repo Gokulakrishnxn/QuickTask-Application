@@ -4,7 +4,6 @@ import * as React from "react"
 import {
   IconCamera,
   IconChartBar,
-  IconChevronDown,
   IconDashboard,
   IconFileAi,
   IconFileDescription,
@@ -12,18 +11,17 @@ import {
   IconLayoutGrid,
   IconListDetails,
   IconSettings,
+  IconUser,
   IconUsers,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
-import { NavUser } from "@/components/nav-user"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar"
 import {
   Sidebar,
   SidebarContent,
@@ -36,9 +34,9 @@ import {
 
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "John Doe",
+    email: "john@example.com",
+    avatar: "",
   },
   navMain: [
     {
@@ -120,13 +118,7 @@ const data = {
       ],
     },
   ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: IconSettings,
-    },
-  ],
+  navSecondary: [],
 }
 
 import { type Task } from "@/components/tasks-table"
@@ -140,31 +132,38 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton className="data-[slot=sidebar-menu-button]:!p-1.5">
-                  <span className="text-base font-semibold">{data.user.name}</span>
-                  <IconChevronDown className="ml-auto size-4" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="start" className="w-48">
-                <DropdownMenuItem>
-                  <IconUsers className="mr-2" />
-                  <span>Team</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        {/* Header content removed */}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} onTaskCreate={onTaskCreate} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        {data.navSecondary.length > 0 && (
+          <NavSecondary items={data.navSecondary} className="mt-auto" />
+        )}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage src={data.user.avatar} alt={data.user.name} />
+                <AvatarFallback className="rounded-lg">
+                  {data.user.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">{data.user.name}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {data.user.email}
+                </span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   )

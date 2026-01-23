@@ -8,12 +8,27 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconDotsVertical,
+  IconGripVertical,
   IconPlus,
   IconTrash,
 } from "@tabler/icons-react"
 import { TaskOverviewSheet } from "@/components/task-overview-sheet"
 import { CreateTaskSheet } from "@/components/create-task-sheet"
 import { toast } from "sonner"
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import {
   flexRender,
   getCoreRowModel,
@@ -27,6 +42,7 @@ import {
   type ColumnFiltersState,
   type SortingState,
   type VisibilityState,
+  type Row,
 } from "@tanstack/react-table"
 
 import { Badge } from "@/components/ui/badge"
@@ -105,11 +121,25 @@ export type Task = {
   deadline?: string
   reminder?: string
   project_id?: string
+   // Optional position field used for drag-and-drop ordering
+  position?: number | null
 }
 
 export const createColumns = (
   onDeleteTask?: (id: string) => Promise<void>
 ): ColumnDef<Task>[] => [
+  {
+    id: "drag-handle",
+    header: "",
+    cell: () => (
+      <div className="flex items-center justify-center w-full h-full py-2 px-1">
+        <IconGripVertical className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+    size: 40,
+  },
   {
     id: "select",
     header: ({ table }) => (
@@ -236,6 +266,68 @@ export const createColumns = (
 
 const columns: ColumnDef<Task>[] = createColumns()
 
+function SortableTableRow({
+  row,
+  onRowClick,
+}: {
+  row: Row<Task>
+  onRowClick: (row: Row<Task>, event: React.MouseEvent<HTMLTableRowElement>) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: row.original.id,
+    })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  // Find the drag handle cell to attach listeners
+  const dragHandleCell = row.getVisibleCells().find(
+    (cell) => cell.column.id === "drag-handle"
+  )
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={style}
+      data-state={row.getIsSelected() && "selected"}
+      className={`hover:bg-muted/50 ${isDragging ? "opacity-50 z-10" : ""}`}
+      onClick={(e) => {
+        // Don't open overview if clicking on drag handle
+        if ((e.target as HTMLElement).closest('[data-drag-handle]')) {
+          return
+        }
+        onRowClick(row, e)
+      }}
+    >
+      {row.getVisibleCells().map((cell) => {
+        const isDragHandle = cell.column.id === "drag-handle"
+        if (isDragHandle) {
+          return (
+            <TableCell
+              key={cell.id}
+              data-drag-handle
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing w-10 touch-none"
+              style={{ cursor: 'grab' }}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </TableCell>
+          )
+        }
+        return (
+          <TableCell key={cell.id}>
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </TableCell>
+        )
+      })}
+    </TableRow>
+  )
+}
+
 export function TasksTable({ 
   data,
   onAddTask,
@@ -262,6 +354,36 @@ export function TasksTable({
   const [isCreateTaskOpen, setIsCreateTaskOpen] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3,
+      },
+    })
+  )
+
+  const [itemOrder, setItemOrder] = React.useState<string[]>(() =>
+    data.map((task) => task.id)
+  )
+
+  const handleRowClick = React.useCallback(
+    (row: Row<Task>, e: React.MouseEvent<HTMLTableRowElement>) => {
+      // Don't open overview if clicking on checkbox or actions button
+      const target = e.target as HTMLElement
+      if (
+        target.closest('input[type="checkbox"]') ||
+        target.closest('button[data-slot="dropdown-menu-trigger"]') ||
+        target.closest('[data-slot="dropdown-menu"]')
+      ) {
+        return
+      }
+
+      setSelectedTask(row.original)
+      setIsOverviewOpen(true)
+    },
+    []
+  )
+
   const table = useReactTable({
     data,
     columns: createColumns(onDeleteTask),
@@ -283,6 +405,72 @@ export function TasksTable({
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
+
+  // Update itemOrder when table rows change (respects sorting/filtering/pagination)
+  React.useEffect(() => {
+    const rowIds = table.getRowModel().rows.map((row) => row.original.id)
+    if (rowIds.length > 0) {
+      setItemOrder(rowIds)
+    }
+  }, [table.getRowModel().rows, data])
+
+  const handleDragEnd = React.useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+
+      const currentRowIds = table.getRowModel().rows.map((row) => row.original.id)
+      const oldIndex = currentRowIds.indexOf(active.id as string)
+      const newIndex = currentRowIds.indexOf(over.id as string)
+      
+      if (oldIndex === -1 || newIndex === -1) return
+
+      const newOrder = arrayMove(currentRowIds, oldIndex, newIndex)
+      setItemOrder(newOrder)
+
+      // Persist new positions if handler is provided
+      if (onUpdateTask) {
+        try {
+          // Build a lookup of tasks by id from current data
+          const taskMap = new Map(data.map((task) => [task.id, task]))
+          
+          // Get all existing positions to find the base
+          const allPositions = data
+            .map(t => typeof t.position === "number" ? t.position : null)
+            .filter((p): p is number => p !== null)
+          
+          // Use the minimum existing position, or 0 if no positions exist
+          const basePosition = allPositions.length > 0 ? Math.min(...allPositions) : 0
+
+          // Update all tasks in the new order with their new positions
+          const updatePromises = newOrder.map((id, index) => {
+            const task = taskMap.get(id)
+            if (!task) return Promise.resolve()
+            
+            // Calculate the new position based on the new index
+            const newPosition = basePosition + index
+            
+            // Always update to ensure consistency (handles null positions)
+            return onUpdateTask(task.id, { position: newPosition })
+          })
+
+          await Promise.all(updatePromises)
+          
+          toast.success("Task order updated", {
+            description: "Task positions have been saved.",
+            duration: 2000,
+          })
+        } catch (error) {
+          console.error("Failed to update task order:", error)
+          toast.error("Failed to save task order. Please try again.")
+          // Revert the local state on error
+          const rowIds = table.getRowModel().rows.map((row) => row.original.id)
+          setItemOrder(rowIds)
+        }
+      }
+    },
+    [data, table, onUpdateTask]
+  )
 
   return (
     <div className="w-full space-y-4">
@@ -426,59 +614,53 @@ export function TasksTable({
         </div>
       </div>
       <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id} colSpan={header.colSpan}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow 
-                  key={row.id} 
-                  data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={(e) => {
-                    // Don't open overview if clicking on checkbox or actions button
-                    const target = e.target as HTMLElement
-                    if (
-                      target.closest('input[type="checkbox"]') ||
-                      target.closest('button[data-slot="dropdown-menu-trigger"]') ||
-                      target.closest('[data-slot="dropdown-menu"]')
-                    ) {
-                      return
-                    }
-                    setSelectedTask(row.original)
-                    setIsOverviewOpen(true)
-                  }}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <SortableContext
+            items={itemOrder}
+            strategy={verticalListSortingStrategy}
+          >
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => {
+                      return (
+                        <TableHead key={header.id} colSpan={header.colSpan}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                        </TableHead>
+                      )
+                    })}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <SortableTableRow
+                      key={row.id}
+                      row={row}
+                      onRowClick={handleRowClick}
+                    />
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-24 text-center"
+                    >
+                      No results.
                     </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </SortableContext>
+        </DndContext>
       </div>
       <div className="flex items-center justify-between px-2">
         <div className="flex-1 text-sm text-muted-foreground">

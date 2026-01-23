@@ -59,8 +59,8 @@ A modern, feature-rich task management application built with Next.js, Supabase,
    - Optionally run `supabase-seed-data.sql` for sample data
 
 5. **Run the development server:**
-   ```bash
-   npm run dev
+```bash
+npm run dev
    ```
 
 6. **Open your browser:**

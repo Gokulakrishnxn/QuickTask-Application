@@ -33,6 +33,10 @@ import { cn } from "@/lib/utils"
 import { type Task } from "@/components/tasks-table"
 import { toast } from "sonner"
 import { useProjects } from "@/hooks/use-projects"
+import {
+  requestBrowserNotificationPermission,
+  showBrowserNotification,
+} from "@/lib/browser-notifications"
 
 const statuses = [
   { value: "backlog", label: "Backlog" },
@@ -79,8 +83,7 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
 
     setIsSubmitting(true)
     try {
-      if (onTaskCreate) {
-        await onTaskCreate({
+      const payload: Omit<Task, "id"> = {
           title: title.trim(),
           description: description.trim() || undefined,
           status,
@@ -89,13 +92,25 @@ export function CreateTaskSheet({ children, onTaskCreate, open: controlledOpen, 
           date: date ? format(date, "yyyy-MM-dd") : undefined,
           deadline: deadline ? format(deadline, "yyyy-MM-dd") : undefined,
           reminder: reminder ? reminder.toISOString() : undefined,
-        })
+      }
+
+      if (onTaskCreate) {
+        await onTaskCreate(payload)
       }
       
       // Show success notification
       toast.success("Task added successfully", {
         description: `"${title.trim()}" has been added to your tasks.`,
         duration: 3000,
+      })
+
+      // Try to show a browser notification (if the user has granted permission)
+      requestBrowserNotificationPermission().then((permission) => {
+        if (permission === "granted") {
+          showBrowserNotification("New task created", {
+            body: `"${payload.title}" was added to your tasks.`,
+          })
+        }
       })
       
       // Reset form
